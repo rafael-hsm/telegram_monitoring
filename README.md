@@ -12,3 +12,9 @@ api_id; api_hash; username; phone
 
 3. Install the libraries:
 `pip install -r requirements. txt`
+
+4. Execute the main.py file.
+
+
+## Example
+![](static/telegram-monitoring-example.gif)
