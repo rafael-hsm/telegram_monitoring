@@ -1,0 +1,13 @@
+# Get your api_id, and api_hash in https://my.telegram.org/auth
+"""
+# YOUR API CREDENTIALS
+API_ID=
+API_HASH=
+USERNAME=
+PHONE=
+
+# BOT TELEGRAM TO TESTS
+TOKEN_TELEGRAM_BOT=
+
+TOKEN_SLACK=
+"""

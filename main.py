@@ -1,10 +1,9 @@
-import config
-import os
 import json
 import requests
 from csv import DictWriter
 
 import pandas as pd
+from decouple import config
 from telethon import TelegramClient, events, sync
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon import functions, types
@@ -26,10 +25,10 @@ class TelegramMonitor:
     """
 
     def __init__(self):
-        self.api_id = config.API_ID
-        self.api_hash = config.API_HASH
-        self.username = config.USERNAME
-        self.phone = config.PHONE
+        self.api_id = config("API_ID")
+        self.api_hash = config("API_HASH")
+        self.username = config("USERNAME")
+        self.phone = config("PHONE")
 
         self.client = TelegramClient(self.username, self.api_id, self.api_hash)
         self.client.start()
@@ -56,7 +55,7 @@ class TelegramMonitor:
                     participant_count = v['participants_count']
                     dict_groups = {'ID': channel_id, 'NAME': name, 'USERNAME': username, 'ACCESS_HASH': access_hash,
                                    'COUNT_PARTICIPANTS': participant_count}
-                    with open('data_groups.csv', 'a', newline='\n') as file:
+                    with open('data_groups.csv', '+a', newline='\n') as file:
                         headersCSV = ['ID', 'NAME', 'USERNAME', 'ACCESS_HASH', 'COUNT_PARTICIPANTS']
                         dictwriter_object = DictWriter(file, fieldnames=headersCSV)
                         dictwriter_object.writerow(dict_groups)
@@ -75,77 +74,85 @@ class TelegramMonitor:
         :return:
         """
         join_group = self.client(JoinChannelRequest(group_id))
-        # print(join_group)
+        return join_group.to_json()
 
     def get_message(self, group_id):
         for message in self.client.get_messages(group_id, limit=100):
             # print(message.stringify())
             # print(dir(message))
             self.list_messages.append(message.message)
-            # self.df = pd.DataFrame(list_messages)
+        return self.list_messages
 
-        # print(f"This is a list of messages: {list_messages}")
-        # print(f"This is len: {len(list_messages)}")
-        # print(self.df.head())
-        # print(self.df.info())
+    def post_message_to_slack(self, text, blocks=None):
+        return requests.post(
+            "https://slack.com/api/chat.postMessage",
+            {
+                "token": config("TOKEN_SLACK"),
+                "channel": "#click-up-updates",
+                "text": text,
+                "icon_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s",
+                "username": "Monitoring Bot",
+                "blocks": json.dumps(blocks) if blocks else None,
+                "link_names": True,
+            },
+        ).json()
 
+    def main(self):
+        for v in words_to_research:
+            tm.research_terms.append(v)
 
-def post_message_to_slack(text, blocks=None):
-    return requests.post(
-        "https://slack.com/api/chat.postMessage",
-        {
-            "token": config.TOKEN_SLACK,
-            "channel": "#click-up-updates",
-            "text": text,
-            "icon_url": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuGqps7ZafuzUsViFGIremEL2a3NR0KO0s0RTCMXmzmREJd5m4MA&s",
-            "username": "Monitoring Bot",
-            "blocks": json.dumps(blocks) if blocks else None,
-            "link_names": True,
-        },
-    ).json()
+        id_groups = tm.research_groups()
+
+        # join in the groups
+        for v in id_groups:
+            channel = tm.join_channel(group_id=v)
+
+        # monitoring message by word
+        list_group_messages = []
+        for i, v in enumerate(id_groups):
+            # print(i, v)
+            all_messages = tm.get_message(group_id=v)
+            list_group_messages.append(all_messages)
+
+        print(f"Total of messages: {len(tm.list_messages)}")
+        for v in tm.list_messages:
+            try:
+                new_check = v.upper().split()
+                for j in new_check:
+                    for k in words_check:
+                        if j == k:
+                            tm.messages_to_send.append(v)
+            except Exception as e:
+                print(e)
+                continue
+
+        print(tm.messages_to_send)
+        print(len(tm.list_messages))
+        print(len(tm.messages_to_send))
+
+        # df2 = pd.DataFrame(tm.list_messages, columns=['messages'])
+        # print(pd.Series(list(tm.list_messages)).value_counts())
+
+        for i, v in enumerate(tm.messages_to_send):
+            dict_text = {i: v}
+            # print(dict_text)
+            new_text = str(dict_text)
+            send_to_slack = tm.post_message_to_slack(text="new_text: test")
+
+    # with client:
+    #     # https://t.me/coinsnipernet
+    #     client.loop.run_until_complete(info_groups())
 
 
 if __name__ == '__main__':
     tm = TelegramMonitor()
     # Words to find groups.
-    words_to_research = ['polygon', 'bitcoin', 'ethereum']
+    words_to_research = ['BITCOIN', 'ETHEREUM']
 
-    for v in words_to_research:
-        tm.research_terms.append(v)
+    # Words to search in groups
+    words_check = ['SCAM', 'EXPLOIT', 'FRAUD', 'HACK', 'MALWARE', 'RUG PULL', 'PONZI',
+                   'PHISHING', 'HONEYPOT', 'UNLOCKED', 'THEFT', 'BLACKMAIL',
+                   'AMUSING', 'AWESOME', 'FANTASTIC']
 
-    id_groups = tm.research_groups()
-
-    # join in the groups
-    for i, v in enumerate(id_groups):
-        tm.join_channel(group_id=v)
-
-    # monitoring message by word
-    list_group_messages = []
-    for i, v in enumerate(id_groups):
-        # print(i, v)
-        all_messages = tm.get_message(group_id=v)
-        list_group_messages.append(all_messages)
-
-    words_check = {'bad_words': ['SCAM', 'EXPLOIT', 'FRAUD', 'HACK', 'MALWARE', 'RUG PULL', 'PONZI',
-                                 'PHISHING', 'HONEYPOT', 'UNLOCKED', 'THEFT', 'BLACKMAIL', ],
-                   'god_words': ['AMUSING', 'AWESOME', 'FANTASTIC']}
-
-    print(f"Total of messages: {len(tm.list_messages)}")
-    count = 0
-    while count < len(tm.list_messages):
-        for i, v in words_check.items():
-            if v == tm.list_messages[count].upper().split():
-                message = tm.list_messages[count]
-                tm.messages_to_send.append(message)
-
-    print(tm.messages_to_send)
-
-# print(tm.df.head())
-# print(tm.df.info())
-
-# print(id_groups)
-
-#
-# with client:
-#     # https://t.me/coinsnipernet
-#     client.loop.run_until_complete(info_groups(phone))
+    # Execute the script
+    tm.main()
